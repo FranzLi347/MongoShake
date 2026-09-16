@@ -35,6 +35,7 @@ func TestParseRawRoundTrip(t *testing.T) {
 		{"array", bson.A{int32(1), int64(2), nil, bson.D{{"x", "value"}}}},
 		{"date", primitive.DateTime(123456)}, {"regex", primitive.Regex{Pattern: "a", Options: "i"}},
 		{"decimal", primitive.NewDecimal128(1, 2)}, {"null", nil},
+		{"code", primitive.CodeWithScope{Code: "return x", Scope: bson.D{{"x", int32(1)}}}},
 		{"min", primitive.MinKey{}}, {"max", primitive.MaxKey{}},
 	}}}
 	for _, op := range []string{"i", "u", "d"} {

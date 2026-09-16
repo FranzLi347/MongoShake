@@ -2,7 +2,7 @@
 
 The collector's oplog deserializer uses `oplog.ParseRaw`. It decodes metadata and
 keeps ordinary `i/u/d` payloads (`o` and `o2`) as immutable slices of the owned
-input BSON. Queueing an oplog therefore does not also retain a decoded document
+input BSON. Nested BSON containers are validated without decoding values. Queueing an oplog therefore does not also retain a decoded document
 tree. The reader already clones the cursor buffer before handing it downstream.
 
 - Collection routing and namespace/time-series namespace transforms use metadata.

@@ -24,8 +24,7 @@ jobs:
           cache: true
       - name: Formatting
         run: |
-          gofmt -w oplog/lazy.go oplog/lazy_test.go executor/lazy_test.go
-          git diff -- oplog/lazy.go oplog/lazy_test.go executor/lazy_test.go
+          test -z "$(gofmt -l oplog/lazy.go oplog/lazy_test.go executor/lazy_test.go)"
       - name: Compile all packages
         run: go test -run '^$' ./...
       - name: Oplog and filter regressions

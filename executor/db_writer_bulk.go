@@ -373,6 +373,10 @@ func (bw *BulkWriter) doUpdate(database, collection string, metadata bson.E, opl
 	}
 
 	l.Logger.Debugf("bulk_writer: update models len %v", len(models))
+	if len(models) == 0 {
+		// Every record may already have been replayed via the applyOps fallback.
+		return nil
+	}
 
 	opts := options.BulkWrite()
 	if conf.Options.IncrSyncBypassDocumentValidation {
@@ -472,4 +476,3 @@ func (bw *BulkWriter) doCommand(database string, metadata bson.E, oplogs []*Oplo
 	}
 	return nil
 }
-

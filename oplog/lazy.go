@@ -17,7 +17,7 @@ import (
 // their existing decoded representation.
 func ParseRaw(input []byte) (*PartialLog, error) {
 	raw := bson.Raw(input)
-	if err := raw.Validate(); err != nil {
+	if err := validateRawDocuments(raw); err != nil {
 		return nil, err
 	}
 	elements, err := raw.Elements()
@@ -62,6 +62,40 @@ func ParseRaw(input []byte) (*PartialLog, error) {
 		}
 	}
 	return log, bson.Unmarshal(input, &log.ParsedLog)
+}
+
+// Raw.Validate only checks the current document's element boundaries. Validate
+// nested containers too, without allocating decoded values or an element slice.
+func validateRawDocuments(raw bson.Raw) error {
+	if err := raw.Validate(); err != nil {
+		return err
+	}
+	remaining := []byte(raw[4 : len(raw)-1])
+	for len(remaining) > 0 {
+		element, rest, ok := bsoncore.ReadElement(remaining)
+		if !ok {
+			return fmt.Errorf("invalid BSON element")
+		}
+		value := element.Value()
+		var nested bson.Raw
+		switch value.Type {
+		case bsontype.EmbeddedDocument, bsontype.Array:
+			nested = bson.Raw(value.Data)
+		case bsontype.CodeWithScope:
+			_, scope, ok := value.CodeWithScopeOK()
+			if !ok {
+				return fmt.Errorf("invalid BSON code with scope")
+			}
+			nested = bson.Raw(scope)
+		}
+		if nested != nil {
+			if err := validateRawDocuments(nested); err != nil {
+				return err
+			}
+		}
+		remaining = rest
+	}
+	return nil
 }
 
 func finishDocument(doc []byte) []byte {
