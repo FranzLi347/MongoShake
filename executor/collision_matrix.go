@@ -350,4 +350,3 @@ func (*BarrierMatrix) split(logs []*PartialLogWithCallback) [][]*PartialLogWithC
 func (barrier *BarrierMatrix) convert(segment []*PartialLogWithCallback) []*OplogRecord {
 	return barrier.NoopMatrix.convert(segment)
 }
-

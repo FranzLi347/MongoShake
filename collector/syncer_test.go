@@ -377,4 +377,3 @@ func TestCheckCheckpointUpdate(t *testing.T) {
 		utils.IncrSentinelOptions.Shutdown = false
 	}
 }
-

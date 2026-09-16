@@ -429,4 +429,3 @@ func (sw *SingleWriter) doCommand(database string, metadata bson.E, oplogs []*Op
 	}
 	return nil
 }
-

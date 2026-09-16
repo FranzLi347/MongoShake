@@ -450,4 +450,3 @@ func replayUpdateViaApplyOps(client *mongo.Client, pLog *oplog.PartialLog) error
 	return client.Database("admin").RunCommand(context.Background(),
 		bson.D{{Key: "applyOps", Value: []interface{}{doc}}}).Err()
 }
-

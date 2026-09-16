@@ -35,7 +35,7 @@ func ParseRaw(input []byte) (*PartialLog, error) {
 			switch value.Type {
 			case bsontype.EmbeddedDocument:
 				doc = value.Document()
-			case bsontype.Null, bsontype.Undefined:
+			case bsontype.Null:
 			default:
 				return nil, fmt.Errorf("oplog %s must be a document, got %s", key, value.Type)
 			}

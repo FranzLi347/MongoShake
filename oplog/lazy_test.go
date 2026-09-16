@@ -133,7 +133,15 @@ func TestParseRawFallbackAndErrors(t *testing.T) {
 		_, err = ParseRaw(raw)
 		require.Error(t, err, field)
 	}
-	for _, object := range []interface{}{nil, primitive.Undefined{}, bson.D{}} {
+	for _, field := range []string{"o", "o2"} {
+		raw, err := bson.Marshal(bson.D{{"op", "i"}, {field, primitive.Undefined{}}})
+		require.NoError(t, err)
+		_, err = ParseRaw(raw)
+		require.Error(t, err)
+		var eager ParsedLog
+		require.Error(t, bson.Unmarshal(raw, &eager))
+	}
+	for _, object := range []interface{}{nil, bson.D{}} {
 		raw := lazyFixture(t, "i", object, nil)
 		log, err := ParseRaw(raw)
 		require.NoError(t, err)

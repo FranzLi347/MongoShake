@@ -24,4 +24,3 @@ func RecordDuplicatedOplog(conn *utils.MongoCommunityConn, coll string, records 
 		}
 	}
 }
-

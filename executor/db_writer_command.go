@@ -384,4 +384,3 @@ func (cw *CommandWriter) doCommand(database string, metadata bson.E, oplogs []*O
 	}
 	return nil
 }
-
