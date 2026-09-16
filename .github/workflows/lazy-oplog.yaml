@@ -29,10 +29,15 @@ jobs:
       - name: Compile all packages
         run: go test -run '^$' ./...
       - name: Oplog and filter regressions
-        run: go test -race ./oplog ./collector/filter ./collector/transform
+        run: |
+          # This legacy change-stream integration test needs a live MongoDB.
+          go test -race ./oplog -skip '^TestConvertEvent2Oplog$'
+          go test -race ./collector/filter ./collector/transform
       - name: Writer and collector regressions
+        if: ${{ !cancelled() }}
         run: |
           go test -race ./executor -run 'Test(Lazy|TransformLog|MergeToGroups|GetFieldValue|SplitDotted|ResolveConflictFilter|ParseDupKey)'
           go test ./collector -run '^TestDeserializer$'
       - name: Allocation benchmark
+        if: ${{ !cancelled() }}
         run: go test ./oplog -run '^$' -bench '^BenchmarkParseRaw$' -benchmem -count=3

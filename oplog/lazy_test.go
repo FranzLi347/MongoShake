@@ -121,6 +121,11 @@ func TestParseRawFallbackAndErrors(t *testing.T) {
 		_, err := ParseRaw(invalid)
 		require.Error(t, err)
 	}
+	corrupt := lazyFixture(t, "i", bson.D{{"x", "value"}}, nil)
+	nested := bson.Raw(corrupt).Lookup("o").Document()
+	nested[len(nested)-1] = 1
+	_, err = ParseRaw(corrupt)
+	require.Error(t, err)
 	for _, field := range []string{"o", "o2", "ts", "txnNumber"} {
 		raw, err := bson.Marshal(bson.D{{"op", "i"}, {field, "invalid"}})
 		require.NoError(t, err)
@@ -143,8 +148,8 @@ func TestParseRawFallbackAndErrors(t *testing.T) {
 
 func TestParseRawUpdateAndMutation(t *testing.T) {
 	cases := []struct {
-		name string
-		object bson.D
+		name     string
+		object   bson.D
 		expected bson.D
 		modifier bool
 	}{
@@ -185,6 +190,16 @@ func TestParseRawUpdateAndMutation(t *testing.T) {
 	require.Equal(t, bsontype.Null, bson.Raw(encoded).Lookup("o").Type)
 }
 
+func TestParseRawLookupDoesNotDescendIntoArrays(t *testing.T) {
+	document := bson.D{{"array", bson.A{bson.D{{"key", "value"}}}}}
+	log, err := ParseRaw(lazyFixture(t, "i", document, nil))
+	require.NoError(t, err)
+	for _, doc := range []interface{}{document, log.ObjectValue()} {
+		_, found := LookupDocument(doc, "array", "0", "key")
+		require.False(t, found)
+	}
+}
+
 func TestParseRawGatherAndIndexValues(t *testing.T) {
 	object := bson.D{{"_id", int32(7)}, {"nested", bson.D{{"key", "value"}}}, {"nested.key", "literal"}}
 	for _, document := range []bson.D{object, {{"$set", object}}} {
@@ -211,18 +226,24 @@ func BenchmarkParseRaw(b *testing.B) {
 	raw := lazyFixture(b, "i", object, nil)
 	for _, lazy := range []bool{false, true} {
 		name := "eager"
-		if lazy { name = "raw" }
+		if lazy {
+			name = "raw"
+		}
 		b.Run(name, func(b *testing.B) {
 			b.ReportAllocs()
 			b.SetBytes(int64(len(raw)))
 			for i := 0; i < b.N; i++ {
 				if lazy {
 					log, err := ParseRaw(raw)
-					if err != nil { b.Fatal(err) }
+					if err != nil {
+						b.Fatal(err)
+					}
 					_ = GetIdOrNSFromOplog(log)
 				} else {
 					log := &PartialLog{}
-					if err := bson.Unmarshal(raw, &log.ParsedLog); err != nil { b.Fatal(err) }
+					if err := bson.Unmarshal(raw, &log.ParsedLog); err != nil {
+						b.Fatal(err)
+					}
 					_ = GetIdOrNSFromOplog(log)
 				}
 			}

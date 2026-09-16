@@ -70,7 +70,7 @@ func resolveConflictFilter(dupErr error, doc interface{}) bson.D {
 	return filter
 }
 
-// getFieldValue extracts a field value from a bson.D document, supporting dotted paths.
+// getFieldValue reads a field from decoded or raw BSON, supporting dotted paths.
 // Returns the value and whether the field was found (distinguishes nil value from missing field).
 func getFieldValue(doc interface{}, field string) (interface{}, bool) {
 	return oplog.LookupDocument(doc, splitDotted(field)...)
@@ -127,4 +127,3 @@ func deleteConflictAndRetry(collection *mongo.Collection, updateFilter interface
 
 	return true, nil
 }
-

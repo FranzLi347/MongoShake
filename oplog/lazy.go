@@ -101,10 +101,24 @@ func (log *ParsedLog) MaterializeObject() error {
 // LookupDocument decodes only the requested value. It preserves BSON types and
 // distinguishes a present null value from a missing field, including for _id.
 func LookupDocument(doc interface{}, keys ...string) (interface{}, bool) {
+	if len(keys) == 0 {
+		return doc, true
+	}
 	if raw, ok := doc.(bson.Raw); ok {
-		value, err := raw.LookupErr(keys...)
-		if err != nil {
-			return nil, false
+		var value bson.RawValue
+		for i, key := range keys {
+			var err error
+			value, err = raw.LookupErr(key)
+			if err != nil {
+				return nil, false
+			}
+			if i < len(keys)-1 {
+				// Match bson.D traversal: an array is not a document, even when
+				// the next path component happens to be a numeric array index.
+				if raw, ok = value.DocumentOK(); !ok {
+					return nil, false
+				}
+			}
 		}
 		var result interface{}
 		if err := value.Unmarshal(&result); err != nil {

@@ -34,9 +34,9 @@ func TestLazyWriters(t *testing.T) {
 	conf.Options.IncrSyncExecutorDupKeyStrategy = "ignore"
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 	cases := []struct {
-		name string
-		op string
-		object bson.D
+		name     string
+		op       string
+		object   bson.D
 		expected bson.D
 	}{
 		{"insert", "i", bson.D{{"_id", int32(1)}, {"value", bson.D{{"a", "payload"}}}}, nil},
@@ -52,9 +52,12 @@ func TestLazyWriters(t *testing.T) {
 				conn := &utils.MongoCommunityConn{Client: mt.Client}
 				var writer BasicWriter
 				switch kind {
-				case "bulk": writer = &BulkWriter{conn: conn}
-				case "single": writer = &SingleWriter{conn: conn}
-				case "command": writer = &CommandWriter{conn: conn}
+				case "bulk":
+					writer = &BulkWriter{conn: conn}
+				case "single":
+					writer = &SingleWriter{conn: conn}
+				case "command":
+					writer = &CommandWriter{conn: conn}
 				}
 				record, raw := lazyRecord(mt, tc.op, tc.object)
 				before := bytes.Clone(raw)
@@ -66,10 +69,14 @@ func TestLazyWriters(t *testing.T) {
 				records := []*OplogRecord{record}
 				var err error
 				switch {
-				case tc.name == "updateOnInsert": err = writer.doUpdateOnInsert("target", "renamed", bson.E{}, records, false)
-				case tc.op == "i": err = writer.doInsert("target", "renamed", bson.E{}, records, false)
-				case tc.op == "u": err = writer.doUpdate("target", "renamed", bson.E{}, records, false)
-				case tc.op == "d": err = writer.doDelete("target", "renamed", bson.E{}, records)
+				case tc.name == "updateOnInsert":
+					err = writer.doUpdateOnInsert("target", "renamed", bson.E{}, records, false)
+				case tc.op == "i":
+					err = writer.doInsert("target", "renamed", bson.E{}, records, false)
+				case tc.op == "u":
+					err = writer.doUpdate("target", "renamed", bson.E{}, records, false)
+				case tc.op == "d":
+					err = writer.doDelete("target", "renamed", bson.E{}, records)
 				}
 				require.NoError(mt, err)
 				event := mt.GetStartedEvent()
@@ -79,16 +86,23 @@ func TestLazyWriters(t *testing.T) {
 				var sent bson.Raw
 				expected := tc.object
 				switch event.CommandName {
-				case "insert": sent = event.Command.Lookup("documents").Array().Index(0).Value().Document()
-				case "delete": sent = event.Command.Lookup("deletes").Array().Index(0).Value().Document().Lookup("q").Document()
+				case "insert":
+					sent = event.Command.Lookup("documents").Array().Index(0).Value().Document()
+				case "delete":
+					sent = event.Command.Lookup("deletes").Array().Index(0).Value().Document().Lookup("q").Document()
 				case "update":
 					update := event.Command.Lookup("updates").Array().Index(0).Value().Document()
 					require.Equal(mt, int32(1), update.Lookup("q", "_id").Int32())
 					sent = update.Lookup("u").Document()
 					if tc.name == "updateOnInsert" {
-						if kind != "command" { expected = bson.D{{"$set", tc.object}} }
-					} else { expected = tc.expected }
-				default: mt.Fatalf("unexpected command %s", event.CommandName)
+						if kind != "command" {
+							expected = bson.D{{"$set", tc.object}}
+						}
+					} else {
+						expected = tc.expected
+					}
+				default:
+					mt.Fatalf("unexpected command %s", event.CommandName)
 				}
 				expectedBytes, err := bson.Marshal(expected)
 				require.NoError(mt, err)
@@ -109,7 +123,9 @@ func TestLazyNamespaceAndDBRef(t *testing.T) {
 		require.NoError(t, err)
 		transformPartialLog(log, transform.NewNamespaceTransform([]string{"source.coll:target.renamed"}), false)
 		expected := "target.renamed"
-		if ns != "source.coll" { expected = "target.system.buckets.renamed" }
+		if ns != "source.coll" {
+			expected = "target.system.buckets.renamed"
+		}
 		require.Equal(t, expected, log.Namespace)
 		require.Nil(t, log.Object)
 		encoded := oplog.LogEntryEncode([]*oplog.GenericOplog{{Parsed: log}})[0]
@@ -130,7 +146,9 @@ func TestLazyCollisionAndConflictFilter(t *testing.T) {
 	object := bson.D{{"_id", int32(1)}, {"nested", bson.D{{"key", "value"}}}, {"nullable", nil}}
 	for _, op := range []string{"i", "u"} {
 		payload := object
-		if op == "u" { payload = bson.D{{"$set", object}} }
+		if op == "u" {
+			payload = bson.D{{"$set", object}}
+		}
 		record, raw := lazyRecord(t, op, payload)
 		log := record.original.partialLog
 		log.UniqueIndexes = bson.M{"nested.key|nullable": nil}
@@ -149,5 +167,39 @@ func TestLazyCollisionAndConflictFilter(t *testing.T) {
 		want, wantFound := getFieldValue(object, key)
 		require.Equal(t, want, v)
 		require.Equal(t, wantFound, found)
+	}
+}
+
+func TestLazyApplyOpsFallback(t *testing.T) {
+	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
+	for _, kind := range []string{"bulk", "single", "command"} {
+		mt.Run(kind, func(mt *mtest.T) {
+			conn := &utils.MongoCommunityConn{Client: mt.Client}
+			var writer BasicWriter
+			switch kind {
+			case "bulk":
+				writer = &BulkWriter{conn: conn}
+			case "single":
+				writer = &SingleWriter{conn: conn}
+			case "command":
+				writer = &CommandWriter{conn: conn}
+			}
+			object := bson.D{{"$v", int32(2)}, {"diff", bson.D{{"sdata", bson.D{
+				{"b", primitive.Binary{Subtype: 7, Data: []byte{1, 2}}},
+			}}}}}
+			record, raw := lazyRecord(mt, "u", object)
+			log := record.original.partialLog
+			log.Namespace = "target.system.buckets.coll"
+			mt.AddMockResponses(mtest.CreateSuccessResponse())
+			require.NoError(mt, writer.doUpdate("target", "system.buckets.coll", bson.E{}, []*OplogRecord{record}, false))
+			event := mt.GetStartedEvent()
+			require.NotNil(mt, event)
+			require.Equal(mt, "applyOps", event.CommandName)
+			inner := event.Command.Lookup("applyOps").Array().Index(0).Value().Document()
+			require.Equal(mt, log.Namespace, inner.Lookup("ns").StringValue())
+			require.Equal(mt, bson.Raw(raw).Lookup("o").Value, inner.Lookup("o").Value)
+			require.Equal(mt, bson.Raw(raw).Lookup("o2").Value, inner.Lookup("o2").Value)
+			require.Nil(mt, log.Object)
+		})
 	}
 }
