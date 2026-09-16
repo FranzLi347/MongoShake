@@ -1,0 +1,38 @@
+name: Lazy oplog BSON
+on:
+  push:
+    branches: ['feat/lazy-oplog-bson-20260916']
+  pull_request:
+    paths:
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/lazy-oplog.yaml'
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GOWORK: 'off'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.5'
+          cache: true
+      - name: Formatting
+        run: |
+          gofmt -w oplog/lazy.go oplog/lazy_test.go executor/lazy_test.go
+          git diff -- oplog/lazy.go oplog/lazy_test.go executor/lazy_test.go
+      - name: Compile all packages
+        run: go test -run '^$' ./...
+      - name: Oplog and filter regressions
+        run: go test -race ./oplog ./collector/filter ./collector/transform
+      - name: Writer and collector regressions
+        run: |
+          go test -race ./executor -run 'Test(Lazy|TransformLog|MergeToGroups|GetFieldValue|SplitDotted|ResolveConflictFilter|ParseDupKey)'
+          go test ./collector -run '^TestDeserializer$'
+      - name: Allocation benchmark
+        run: go test ./oplog -run '^$' -bench '^BenchmarkParseRaw$' -benchmem -count=3

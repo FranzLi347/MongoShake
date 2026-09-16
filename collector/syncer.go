@@ -492,11 +492,7 @@ func (sync *OplogSyncer) deserializer(index int) {
 		}
 	} else {
 		// parse []byte (oplog format) -> oplog
-		parser = func(input []byte) (*oplog.PartialLog, error) {
-			log := oplog.ParsedLog{}
-			err := bson.Unmarshal(input, &log)
-			return &oplog.PartialLog{ParsedLog: log}, err
-		}
+		parser = oplog.ParseRaw
 	}
 
 	// combiner is used to combine data and send to downstream

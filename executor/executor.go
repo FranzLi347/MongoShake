@@ -288,6 +288,9 @@ func transformPartialLog(partialLog *oplog.PartialLog, nsTrans *transform.Namesp
 		}
 		partialLog.Namespace = transformTimeseriesNs(partialLog.Namespace, nsTrans)
 		if transformRef {
+			if err := partialLog.MaterializeObject(); err != nil {
+				l.Logger.Panicf("materialize oplog for DBRef transform failed: %v", err)
+			}
 			partialLog.Object = transform.TransformDBRef(partialLog.Object, db, nsTrans)
 		}
 	} else {
