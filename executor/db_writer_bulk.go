@@ -40,10 +40,10 @@ func (bw *BulkWriter) doInsert(database, collection string, metadata bson.E, opl
 				return result.Err()
 			}
 		} else {
-			models = append(models, mongo.NewInsertOneModel().SetDocument(log.original.partialLog.Object))
+			models = append(models, mongo.NewInsertOneModel().SetDocument(log.original.partialLog.ObjectValue()))
 			modelOplogs = append(modelOplogs, log)
 			l.Logger.Debugf("bulk_writer: insert org_oplog:%v insert_doc:%v",
-				log.original.partialLog, log.original.partialLog.Object)
+				log.original.partialLog, log.original.partialLog.ObjectValue())
 		}
 	}
 
@@ -122,7 +122,7 @@ func (bw *BulkWriter) doUpdateOnInsert(database, collection string, metadata bso
 	var modelOplogs []*OplogRecord
 
 	for _, log := range oplogs {
-		newObject := log.original.partialLog.Object
+		newObject := log.original.partialLog.ObjectValue()
 		if upsert && len(log.original.partialLog.DocumentKey) > 0 {
 
 			models = append(models, mongo.NewUpdateOneModel().
@@ -134,7 +134,7 @@ func (bw *BulkWriter) doUpdateOnInsert(database, collection string, metadata bso
 			//	l.Logger.Warnf("doUpdateOnInsert runs upsert but lack documentKey: %v", log.original.partialLog)
 			// }
 			// insert must have _id
-			if id := oplog.GetKey(log.original.partialLog.Object, ""); id != nil {
+			if id := log.original.partialLog.ObjectKey(""); id != nil {
 
 				model := mongo.NewUpdateOneModel().
 					SetFilter(bson.D{{"_id", id}}).
@@ -319,31 +319,19 @@ func (bw *BulkWriter) doUpdate(database, collection string, metadata bson.E, opl
 
 		updateCmd := "update"
 		l.Logger.Debugf("bulk_writer doUpdate: org_doc:%v", log.original.partialLog)
-		if oplog.FindFiledPrefix(log.original.partialLog.Object, "$") {
+		if log.original.partialLog.ObjectHasPrefix("$") {
 			var oplogErr error
-
-			oplogVer, ok := oplog.GetKey(log.original.partialLog.Object, versionMark).(int32)
-			l.Logger.Debugf("bulk_writer doUpdate: have $, org_object:%v "+
-				"object_ver:%v\n", log.original.partialLog.Object, oplogVer)
-
-			if ok && oplogVer == 2 {
-				if newObject, oplogErr = oplog.DiffUpdateOplogToNormal(log.original.partialLog.Object); oplogErr != nil {
-					// Time-series bucket update with column-store binary diff (e.g., sdata.b)
-					// cannot be converted to normal $set/$unset. Fall back to replay with 'applyOps' command.
-					if strings.HasPrefix(collection, utils.VarSystemBucketsPrefix) {
-						l.Logger.Infof("bulk_writer fall back to applyOps for time-series bucket update on %s.%s: %v",
-							database, collection, oplogErr)
-						if applyErr := replayUpdateViaApplyOps(bw.conn.Client, log.original.partialLog); applyErr != nil {
-							return applyErr
-						}
-						continue
+			if newObject, oplogErr = log.original.partialLog.UpdateValue(); oplogErr != nil {
+				// Column-store diffs in time-series buckets need the original applyOps.
+				if strings.HasPrefix(collection, utils.VarSystemBucketsPrefix) {
+					l.Logger.Infof("bulk_writer fall back to applyOps for time-series bucket update on %s.%s: %v", database, collection, oplogErr)
+					if applyErr := replayUpdateViaApplyOps(bw.conn.Client, log.original.partialLog); applyErr != nil {
+						return applyErr
 					}
-					l.Logger.Errorf("doUpdate run failed err[%v] org_doc[%v]", oplogErr, log.original.partialLog)
-					return oplogErr
+					continue
 				}
-			} else {
-				log.original.partialLog.Object = oplog.RemoveFiled(log.original.partialLog.Object, versionMark)
-				newObject = log.original.partialLog.Object
+				l.Logger.Errorf("doUpdate run failed err[%v] org_doc[%v]", oplogErr, log.original.partialLog)
+				return oplogErr
 			}
 
 			if upsert && len(log.original.partialLog.DocumentKey) > 0 {
@@ -356,7 +344,7 @@ func (bw *BulkWriter) doUpdate(database, collection string, metadata bson.E, opl
 				// }
 
 				model := mongo.NewUpdateOneModel().
-					SetFilter(log.original.partialLog.Query).
+					SetFilter(log.original.partialLog.QueryValue()).
 					SetUpdate(newObject)
 				if upsert {
 					model.SetUpsert(true)
@@ -364,17 +352,17 @@ func (bw *BulkWriter) doUpdate(database, collection string, metadata bson.E, opl
 				models = append(models, model)
 			}
 		} else {
-			newObject = log.original.partialLog.Object
+			newObject = log.original.partialLog.ObjectValue()
 
 			if upsert && len(log.original.partialLog.DocumentKey) > 0 {
 				models = append(models, mongo.NewReplaceOneModel().
 					SetFilter(log.original.partialLog.DocumentKey).
-					SetReplacement(log.original.partialLog.Object).
+					SetReplacement(log.original.partialLog.ObjectValue()).
 					SetUpsert(true))
 			} else {
 				model := mongo.NewReplaceOneModel().
-					SetFilter(log.original.partialLog.Query).
-					SetReplacement(log.original.partialLog.Object)
+					SetFilter(log.original.partialLog.QueryValue()).
+					SetReplacement(log.original.partialLog.ObjectValue())
 				if upsert || log.original.partialLog.Upsert {
 					model.SetUpsert(true)
 				}
@@ -443,7 +431,7 @@ func (bw *BulkWriter) doUpdate(database, collection string, metadata bson.E, opl
 func (bw *BulkWriter) doDelete(database, collection string, metadata bson.E, oplogs []*OplogRecord) error {
 	var models []mongo.WriteModel
 	for _, log := range oplogs {
-		models = append(models, mongo.NewDeleteOneModel().SetFilter(log.original.partialLog.Object))
+		models = append(models, mongo.NewDeleteOneModel().SetFilter(log.original.partialLog.ObjectValue()))
 
 		l.Logger.Debugf("bulk_writer: delete %v", log.original.partialLog)
 	}
@@ -467,7 +455,7 @@ func (bw *BulkWriter) doDelete(database, collection string, metadata bson.E, opl
 func (bw *BulkWriter) doCommand(database string, metadata bson.E, oplogs []*OplogRecord) error {
 	var err error
 	for _, log := range oplogs {
-		newObject := log.original.partialLog.Object
+		newObject := log.original.partialLog.ObjectValue()
 		operation, found := oplog.ExtraCommandName(newObject)
 		if conf.Options.FilterDDLEnable || (found && oplog.IsSyncDataCommand(operation)) {
 			// execute one by one with sequence order
