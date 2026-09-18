@@ -31,8 +31,10 @@ jobs:
       - name: Build all packages
         run: go build ./...
       - name: Start replica set and two-shard MongoDB 7.0 cluster
+        id: mongodb
         run: |
           set -euo pipefail
+          trap 'docker ps -a; for n in rs cfg shard1 shard2 router; do docker logs --tail 30 "$n" || true; done' ERR
           docker pull mongo:7.0
           docker run -d --name rs --network host mongo:7.0 --replSet rs --port 27019 --bind_ip_all --wiredTigerCacheSizeGB 0.25
           docker run -d --name cfg --network host mongo:7.0 --configsvr --replSet cfg --port 27020 --bind_ip_all --wiredTigerCacheSizeGB 0.25
@@ -44,7 +46,7 @@ jobs:
               if docker exec "$name" mongosh --quiet --port "$port" --eval 'quit(db.adminCommand({ping:1}).ok ? 0 : 1)'; then break; fi
               sleep 1
             done
-            docker exec "$name" mongosh --quiet --port "$port" --eval "rs.initiate({_id:'$name',members:[{_id:0,host:'127.0.0.1:$port'}]})"
+            docker exec "$name" mongosh --quiet --port "$port" --eval "const c={_id:'$name',members:[{_id:0,host:'127.0.0.1:$port'}]}; if ('$name'==='cfg') c.configsvr=true; assert.commandWorked(rs.initiate(c))"
             for i in $(seq 1 30); do
               if docker exec "$name" mongosh --quiet --port "$port" --eval 'quit(db.hello().isWritablePrimary ? 0 : 1)'; then break; fi
               sleep 1
@@ -60,7 +62,7 @@ jobs:
       - name: Complete executor tests against real MongoDB with race detector
         run: go test -race ./executor -count=1 -timeout=8m -v
       - name: Complete oplog tests against real MongoDB with race detector
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.mongodb.outcome == 'success' }}
         run: go test -race ./oplog -count=1 -timeout=8m
       - name: Configuration, filter, and transform regressions
         if: ${{ !cancelled() }}

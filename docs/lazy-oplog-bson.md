@@ -66,8 +66,7 @@ GOWORK=off go test -race ./oplog ./executor
 `TestDeserializer` is listed without `-race` because its existing goroutine
 lifecycle/global configuration and `recordLastFetchStats` updates have known
 races also reproducible on develop. The isolated parser-switch and configuration
-tests can be run with `go test -race ./collector ./collector/configure -run
-'^TestLazy'`. This change does not claim to fix the pre-existing collector races
+tests can be run with `go test -race ./collector ./collector/configure -run '^TestLazy'`. This change does not claim to fix the pre-existing collector races
 or the timestamp-shift warning from `go vet ./executor`.
 
 The benchmark compares eager decoding and raw parsing plus ID extraction on the

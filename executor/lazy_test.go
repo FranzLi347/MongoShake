@@ -237,3 +237,13 @@ func TestLazySimilarIndexNamespaceTransform(t *testing.T) {
     require.Equal(t, "target.mysystem.indexes", log.Namespace)
     require.Nil(t, log.Object)
 }
+
+func TestLazyMalformedIndexFailsBeforeExecution(t *testing.T) {
+    for _, value := range []interface{}{nil, int32(42), ""} {
+        record := &OplogRecord{original: &PartialLogWithCallback{partialLog: &oplog.PartialLog{ParsedLog: oplog.ParsedLog{
+            Operation: "i", Namespace: "source.system.indexes", Object: bson.D{{"ns", value}},
+        }}}}
+        exec := &Executor{batchExecutor: &BatchGroupExecutor{}}
+        require.ErrorContains(t, exec.doSync([]*OplogRecord{record}), "invalid o.ns")
+    }
+}
