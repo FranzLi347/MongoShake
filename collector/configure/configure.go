@@ -59,44 +59,46 @@ type Configuration struct {
 	SkipNSShareKeyVerify                   []string `config:"skip.nsshardkey.verify"`               // add v2.8.2
 
 	// 2. full sync
-	FullSyncReaderCollectionParallel     int    `config:"full_sync.reader.collection_parallel"`
-	FullSyncReaderWriteDocumentParallel  int    `config:"full_sync.reader.write_document_parallel"`
-	FullSyncReaderDocumentBatchSize      int    `config:"full_sync.reader.document_batch_size"`
-	FullSyncReaderFetchBatchSize         int    `config:"full_sync.reader.fetch_batch_size"`
-	FullSyncReaderParallelThread         int    `config:"full_sync.reader.parallel_thread"`      // add v2.6.4
-	FullSyncReaderParallelIndex          string `config:"full_sync.reader.parallel_index"`       // add v2.6.4
-	FullSyncReaderSplitMaxChunkSize      int    `config:"full_sync.reader.split_max_chunk_size"` // add v2.8.7
-	FullSyncCollectionDrop               bool   `config:"full_sync.collection_exist_drop"`
-	FullSyncCreateIndex                  string `config:"full_sync.create_index"`
-	FullSyncReaderOplogStoreDisk         bool   `config:"full_sync.reader.oplog_store_disk"`
-	FullSyncReaderOplogStoreDiskMaxSize  int64  `config:"full_sync.reader.oplog_store_disk_max_size"`
-	FullSyncExecutorInsertOnDupUpdate    bool   `config:"full_sync.executor.insert_on_dup_update"`
-	FullSyncExecutorFilterOrphanDocument bool   `config:"full_sync.executor.filter.orphan_document"`
-	FullSyncExecutorMajorityEnable       bool   `config:"full_sync.executor.majority_enable"`
-	FullSyncDoNotShardDest               bool   `config:"full_sync.do_not_shard_destination"` // add v2.8.6
+	FullSyncReaderCollectionParallel          int    `config:"full_sync.reader.collection_parallel"`
+	FullSyncReaderWriteDocumentParallel       int    `config:"full_sync.reader.write_document_parallel"`
+	FullSyncReaderDocumentBatchSize           int    `config:"full_sync.reader.document_batch_size"`
+	FullSyncReaderFetchBatchSize              int    `config:"full_sync.reader.fetch_batch_size"`
+	FullSyncReaderParallelThread              int    `config:"full_sync.reader.parallel_thread"`      // add v2.6.4
+	FullSyncReaderParallelIndex               string `config:"full_sync.reader.parallel_index"`       // add v2.6.4
+	FullSyncReaderSplitMaxChunkSize           int    `config:"full_sync.reader.split_max_chunk_size"` // add v2.8.7
+	FullSyncCollectionDrop                    bool   `config:"full_sync.collection_exist_drop"`
+	FullSyncCreateIndex                       string `config:"full_sync.create_index"`
+	FullSyncReaderOplogStoreDisk              bool   `config:"full_sync.reader.oplog_store_disk"`
+	FullSyncReaderOplogStoreDiskMaxSize       int64  `config:"full_sync.reader.oplog_store_disk_max_size"`
+	FullSyncExecutorInsertOnDupUpdate         bool   `config:"full_sync.executor.insert_on_dup_update"`
+	FullSyncExecutorFilterOrphanDocument      bool   `config:"full_sync.executor.filter.orphan_document"`
+	FullSyncExecutorMajorityEnable            bool   `config:"full_sync.executor.majority_enable"`
+	FullSyncDoNotShardDest                    bool   `config:"full_sync.do_not_shard_destination"`              // add v2.8.6
+	FullSyncExecutorImmutableShardKeyFallback bool   `config:"full_sync.executor.immutable_shard_key_fallback"` // add v2.8.9
 
 	// 3. incr sync
-	IncrSyncLazyOplogParse                 bool     `config:"incr_sync.lazy_oplog_parse"` // add v2.8.9
-	IncrSyncMongoFetchMethod               string   `config:"incr_sync.mongo_fetch_method"`
-	IncrSyncChangeStreamWatchFullDocument  bool     `config:"incr_sync.change_stream.watch_full_document"`
-	IncrSyncReaderFetchBatchSize           int      `config:"incr_sync.reader.fetch_batch_size"`
-	IncrSyncOplogGIDS                      []string `config:"incr_sync.oplog.gids"`
-	IncrSyncShardKey                       string   `config:"incr_sync.shard_key"`
-	IncrSyncShardByObjectIdWhiteList       []string `config:"incr_sync.shard_by_object_id_whitelist"`
-	IncrSyncWorker                         int      `config:"incr_sync.worker"`
-	IncrSyncTunnelWriteThread              int      `config:"incr_sync.tunnel.write_thread"` // add v2.4.21
-	IncrSyncTargetDelay                    int64    `config:"incr_sync.target_delay"`
-	IncrSyncWorkerBatchQueueSize           uint64   `config:"incr_sync.worker.batch_queue_size"`
-	IncrSyncAdaptiveBatchingMaxSize        int      `config:"incr_sync.adaptive.batching_max_size"`
-	IncrSyncFetcherBufferCapacity          int      `config:"incr_sync.fetcher.buffer_capacity"`
-	IncrSyncFetcherBufferSizeThresholdInKB int      `config:"incr_sync.fetcher.buffer_size_threshold_in_kb"` // add v2.8.6
-	IncrSyncExecutorUpsert                 bool     `config:"incr_sync.executor.upsert"`
-	IncrSyncExecutorInsertOnDupUpdate      bool     `config:"incr_sync.executor.insert_on_dup_update"`
-	IncrSyncExecutorDupKeyStrategy         string   `config:"incr_sync.executor.dup_key_strategy"`   // add v2.8.9
-	IncrSyncExecutorDupKeySkipRules        []string `config:"incr_sync.executor.dup_key_skip_rules"` // add v2.8.9
-	IncrSyncConflictWriteTo                string   `config:"incr_sync.conflict_write_to"`           // remove "sdk" option since v2.4.21
-	IncrSyncExecutorMajorityEnable         bool     `config:"incr_sync.executor.majority_enable"`
-	IncrSyncBypassDocumentValidation       bool     `config:"incr_sync.executor.bypass_document_validation"` // add v2.8.7
+	IncrSyncLazyOplogParse                    bool     `config:"incr_sync.lazy_oplog_parse"` // add v2.8.9
+	IncrSyncMongoFetchMethod                  string   `config:"incr_sync.mongo_fetch_method"`
+	IncrSyncChangeStreamWatchFullDocument     bool     `config:"incr_sync.change_stream.watch_full_document"`
+	IncrSyncReaderFetchBatchSize              int      `config:"incr_sync.reader.fetch_batch_size"`
+	IncrSyncOplogGIDS                         []string `config:"incr_sync.oplog.gids"`
+	IncrSyncShardKey                          string   `config:"incr_sync.shard_key"`
+	IncrSyncShardByObjectIdWhiteList          []string `config:"incr_sync.shard_by_object_id_whitelist"`
+	IncrSyncWorker                            int      `config:"incr_sync.worker"`
+	IncrSyncTunnelWriteThread                 int      `config:"incr_sync.tunnel.write_thread"` // add v2.4.21
+	IncrSyncTargetDelay                       int64    `config:"incr_sync.target_delay"`
+	IncrSyncWorkerBatchQueueSize              uint64   `config:"incr_sync.worker.batch_queue_size"`
+	IncrSyncAdaptiveBatchingMaxSize           int      `config:"incr_sync.adaptive.batching_max_size"`
+	IncrSyncFetcherBufferCapacity             int      `config:"incr_sync.fetcher.buffer_capacity"`
+	IncrSyncFetcherBufferSizeThresholdInKB    int      `config:"incr_sync.fetcher.buffer_size_threshold_in_kb"` // add v2.8.6
+	IncrSyncExecutorUpsert                    bool     `config:"incr_sync.executor.upsert"`
+	IncrSyncExecutorInsertOnDupUpdate         bool     `config:"incr_sync.executor.insert_on_dup_update"`
+	IncrSyncExecutorDupKeyStrategy            string   `config:"incr_sync.executor.dup_key_strategy"`             // add v2.8.9
+	IncrSyncExecutorDupKeySkipRules           []string `config:"incr_sync.executor.dup_key_skip_rules"`           // add v2.8.9
+	IncrSyncExecutorImmutableShardKeyFallback bool     `config:"incr_sync.executor.immutable_shard_key_fallback"` // add v2.8.9
+	IncrSyncConflictWriteTo                   string   `config:"incr_sync.conflict_write_to"`                     // remove "sdk" option since v2.4.21
+	IncrSyncExecutorMajorityEnable            bool     `config:"incr_sync.executor.majority_enable"`
+	IncrSyncBypassDocumentValidation          bool     `config:"incr_sync.executor.bypass_document_validation"` // add v2.8.7
 
 	/*---------------------------------------------------------*/
 	// inner variables, not open to user
