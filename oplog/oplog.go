@@ -470,3 +470,9 @@ func combinePrefixField(prefixField string, obj interface{}) interface{} {
 
 	return result
 }
+
+// IsLegacyIndexNamespace recognizes the legacy index collection, not similarly named user collections.
+func IsLegacyIndexNamespace(ns string) bool {
+	_, collection, found := strings.Cut(ns, ".")
+	return found && collection == "system.indexes"
+}

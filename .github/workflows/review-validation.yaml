@@ -1,0 +1,74 @@
+name: PR 1003 fork validation
+on:
+  push:
+    branches: ['validation/lazy-oplog-review-*']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GOWORK: 'off'
+      MONGOSHAKE_TEST_URL: mongodb://127.0.0.1:27019/?replicaSet=rs
+      MONGOSHAKE_TEST_URL_SHARDING: mongodb://127.0.0.1:27018
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Format changed Go files and emit patch
+        run: |
+          git diff --name-only 53514441d39c85bdd87a3eb960787520c741ddf7 -- '*.go' | xargs gofmt -w
+          python3 - <<'PY'
+          import base64, subprocess
+          patch = subprocess.check_output(['git', 'diff'])
+          print('FORMAT_PATCH_BASE64=' + base64.b64encode(patch).decode())
+          PY
+      - name: Build all packages
+        run: go build ./...
+      - name: Start replica set and two-shard MongoDB 7.0 cluster
+        run: |
+          set -euo pipefail
+          docker pull mongo:7.0
+          docker run -d --name rs --network host mongo:7.0 --replSet rs --port 27019 --bind_ip_all --wiredTigerCacheSizeGB 0.25
+          docker run -d --name cfg --network host mongo:7.0 --configsvr --replSet cfg --port 27020 --bind_ip_all --wiredTigerCacheSizeGB 0.25
+          docker run -d --name shard1 --network host mongo:7.0 --shardsvr --replSet shard1 --port 27021 --bind_ip_all --wiredTigerCacheSizeGB 0.25
+          docker run -d --name shard2 --network host mongo:7.0 --shardsvr --replSet shard2 --port 27022 --bind_ip_all --wiredTigerCacheSizeGB 0.25
+          for spec in rs:27019 cfg:27020 shard1:27021 shard2:27022; do
+            name=${spec%:*}; port=${spec#*:}
+            for i in $(seq 1 30); do
+              if docker exec "$name" mongosh --quiet --port "$port" --eval 'quit(db.adminCommand({ping:1}).ok ? 0 : 1)'; then break; fi
+              sleep 1
+            done
+            docker exec "$name" mongosh --quiet --port "$port" --eval "rs.initiate({_id:'$name',members:[{_id:0,host:'127.0.0.1:$port'}]})"
+            for i in $(seq 1 30); do
+              if docker exec "$name" mongosh --quiet --port "$port" --eval 'quit(db.hello().isWritablePrimary ? 0 : 1)'; then break; fi
+              sleep 1
+            done
+            docker exec "$name" mongosh --quiet --port "$port" --eval 'quit(db.hello().isWritablePrimary ? 0 : 1)'
+          done
+          docker run -d --name router --network host mongo:7.0 mongos --configdb cfg/127.0.0.1:27020 --port 27018 --bind_ip_all
+          for i in $(seq 1 30); do
+            if docker exec router mongosh --quiet --port 27018 --eval 'quit(db.adminCommand({ping:1}).ok ? 0 : 1)'; then break; fi
+            sleep 1
+          done
+          docker exec router mongosh --quiet --port 27018 --eval 'assert.commandWorked(sh.addShard("shard1/127.0.0.1:27021")); assert.commandWorked(sh.addShard("shard2/127.0.0.1:27022")); printjson(db.adminCommand({listShards:1}))'
+      - name: Complete executor tests against real MongoDB with race detector
+        run: go test -race ./executor -count=1 -timeout=8m -v
+      - name: Complete oplog tests against real MongoDB with race detector
+        if: ${{ !cancelled() }}
+        run: go test -race ./oplog -count=1 -timeout=8m
+      - name: Configuration, filter, and transform regressions
+        if: ${{ !cancelled() }}
+        run: |
+          go test -race ./collector/configure ./collector/filter ./collector/transform
+          go test -race ./collector -run '^TestLazy' -count=1
+          # TestDeserializer has pre-existing global-option / stats races.
+          go test ./collector -run '^TestDeserializer$' -count=1
+      - name: Allocation benchmark
+        if: ${{ !cancelled() }}
+        run: go test ./oplog -run '^$' -bench '^BenchmarkParseRaw$' -benchmem -count=3

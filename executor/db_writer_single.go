@@ -287,12 +287,14 @@ func (sw *SingleWriter) doUpdate(database, collection string, metadata bson.E, o
 			if update, oplogErr = log.original.partialLog.UpdateValue(); oplogErr != nil {
 				// Column-store diffs in time-series buckets need the original applyOps.
 				if strings.HasPrefix(collection, utils.VarSystemBucketsPrefix) {
-					if applyErr := replayUpdateViaApplyOps(sw.conn.Client, log.original.partialLog); applyErr != nil {
+					l.Logger.Infof("single_writer fall back to applyOps for time-series bucket update on %s.%s: %v", database, collection, oplogErr)
+				if applyErr := replayUpdateViaApplyOps(sw.conn.Client, log.original.partialLog); applyErr != nil {
 						return applyErr
 					}
 					continue
 				}
-				return oplogErr
+				l.Logger.Errorf("doUpdate run failed err[%v] org_doc[%v]", oplogErr, log.original.partialLog)
+			return oplogErr
 			}
 
 			opts := options.Update()
@@ -407,7 +409,7 @@ func (sw *SingleWriter) doDelete(database, collection string, metadata bson.E, o
 func (sw *SingleWriter) doCommand(database string, metadata bson.E, oplogs []*OplogRecord) error {
 	var err error
 	for _, log := range oplogs {
-		newObject := log.original.partialLog.Object
+		newObject := log.original.partialLog.ObjectValue()
 		operation, found := oplog.ExtraCommandName(newObject)
 		if conf.Options.FilterDDLEnable || (found && oplog.IsSyncDataCommand(operation)) {
 			// execute one by one with sequence order

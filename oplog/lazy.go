@@ -17,7 +17,7 @@ import (
 // their existing decoded representation.
 func ParseRaw(input []byte) (*PartialLog, error) {
 	raw := bson.Raw(input)
-	if err := validateRawDocuments(raw); err != nil {
+	if err := validateRawDocuments(raw, 0); err != nil {
 		return nil, err
 	}
 	elements, err := raw.Elements()
@@ -56,7 +56,7 @@ func ParseRaw(input []byte) (*PartialLog, error) {
 	}
 	switch log.Operation {
 	case "i", "u", "d":
-		if !strings.HasSuffix(log.Namespace, ".system.indexes") {
+		if !IsLegacyIndexNamespace(log.Namespace) {
 			log.objectRaw, log.queryRaw = object, query
 			return log, nil
 		}
@@ -66,7 +66,13 @@ func ParseRaw(input []byte) (*PartialLog, error) {
 
 // Raw.Validate only checks the current document's element boundaries. Validate
 // nested containers too, without allocating decoded values or an element slice.
-func validateRawDocuments(raw bson.Raw) error {
+// Leave room for oplog/transaction wrappers around server-limited documents.
+const maxRawDocumentDepth = 200
+
+func validateRawDocuments(raw bson.Raw, depth int) error {
+	if depth > maxRawDocumentDepth {
+		return fmt.Errorf("BSON nesting exceeds maximum depth %d", maxRawDocumentDepth)
+	}
 	if err := raw.Validate(); err != nil {
 		return err
 	}
@@ -89,7 +95,7 @@ func validateRawDocuments(raw bson.Raw) error {
 			nested = bson.Raw(scope)
 		}
 		if nested != nil {
-			if err := validateRawDocuments(nested); err != nil {
+			if err := validateRawDocuments(nested, depth+1); err != nil {
 				return err
 			}
 		}
@@ -124,9 +130,11 @@ func (log *ParsedLog) QueryValue() interface{} {
 // MaterializeObject is required before code that mutates Object in place.
 func (log *ParsedLog) MaterializeObject() error {
 	if log.Object == nil && log.objectRaw != nil {
-		if err := bson.Unmarshal(log.objectRaw, &log.Object); err != nil {
+		var object bson.D
+		if err := bson.Unmarshal(log.objectRaw, &object); err != nil {
 			return err
 		}
+		log.Object = object
 	}
 	log.objectRaw = nil
 	return nil

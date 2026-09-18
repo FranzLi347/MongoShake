@@ -1,8 +1,11 @@
 # Lazy CRUD oplog payloads
 
-The collector's oplog deserializer uses `oplog.ParseRaw`. It decodes metadata and
+The collector's oplog deserializer uses `oplog.ParseRaw` by default. Set
+`incr_sync.lazy_oplog_parse = false` and restart to restore eager BSON decoding.
+The switch does not affect change streams. It decodes metadata and
 keeps ordinary `i/u/d` payloads (`o` and `o2`) as immutable slices of the owned
-input BSON. Nested BSON containers are validated without decoding values. Queueing an oplog therefore does not also retain a decoded document
+input BSON. Nested BSON containers are validated without decoding values, with a maximum
+nesting depth of 200 (including oplog wrappers). Queueing an oplog therefore does not also retain a decoded document
 tree. The reader already clones the cursor buffer before handing it downstream.
 
 - Collection routing and namespace/time-series namespace transforms use metadata.
@@ -13,7 +16,10 @@ tree. The reader already clones the cursor buffer before handing it downstream.
 - V2 diffs use the existing conversion at execution time; their temporary decoded
   tree is not stored back on the queued oplog. Time-series applyOps fallback keeps
   the original diff.
-- DBRef transforms explicitly materialize the object before modifying it.
+- DBRef transforms explicitly materialize the object before modifying it, so
+  enabling `incr_sync.dbref` with namespace transforms disables the raw writer
+  benefit. Decode failures return to the executor retry loop before writes or
+  acknowledgement; failed decodes are never cached as partial objects.
 - BSON serialization preserves raw payload bytes and modified metadata. JSON and
   extended JSON preserve their existing output formats; JSON decoding uses a copy
   so logging does not retain decoded trees in queues.
@@ -49,7 +55,20 @@ GOWORK=off go test ./oplog -run '^$' -bench '^BenchmarkParseRaw$' -benchmem -cou
 ```
 
 The existing `TestConvertEvent2Oplog` integration test requires a live MongoDB
-and is excluded from this network-free workflow.
+and is excluded only from the network-free commands above. For integration
+coverage, provision a replica set and a sharded cluster, set
+`MONGOSHAKE_TEST_URL` and `MONGOSHAKE_TEST_URL_SHARDING`, and run:
+
+```sh
+GOWORK=off go test -race ./oplog ./executor
+```
+
+`TestDeserializer` is listed without `-race` because its existing goroutine
+lifecycle/global configuration and `recordLastFetchStats` updates have known
+races also reproducible on develop. The isolated parser-switch and configuration
+tests can be run with `go test -race ./collector ./collector/configure -run
+'^TestLazy'`. This change does not claim to fix the pre-existing collector races
+or the timestamp-shift warning from `go vet ./executor`.
 
 The benchmark compares eager decoding and raw parsing plus ID extraction on the
 same document containing 4,096 nested fields. `B/op` and `allocs/op` describe

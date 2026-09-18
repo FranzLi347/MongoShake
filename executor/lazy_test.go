@@ -62,7 +62,8 @@ func TestLazyWriters(t *testing.T) {
 				record, raw := lazyRecord(mt, tc.op, tc.object)
 				before := bytes.Clone(raw)
 				log := record.original.partialLog
-				transformPartialLog(log, transform.NewNamespaceTransform([]string{"source.coll:target.renamed"}), false)
+				_, transformErr := transformPartialLog(log, transform.NewNamespaceTransform([]string{"source.coll:target.renamed"}), false)
+				require.NoError(mt, transformErr)
 				require.Equal(mt, "target.renamed", log.Namespace)
 				require.IsType(mt, bson.Raw{}, log.ObjectValue())
 				mt.AddMockResponses(mtest.CreateSuccessResponse(bson.E{Key: "n", Value: int32(1)}, bson.E{Key: "nModified", Value: int32(1)}))
@@ -121,7 +122,8 @@ func TestLazyNamespaceAndDBRef(t *testing.T) {
 		require.NoError(t, err)
 		log, err := oplog.ParseRaw(raw)
 		require.NoError(t, err)
-		transformPartialLog(log, transform.NewNamespaceTransform([]string{"source.coll:target.renamed"}), false)
+		_, transformErr := transformPartialLog(log, transform.NewNamespaceTransform([]string{"source.coll:target.renamed"}), false)
+		require.NoError(t, transformErr)
 		expected := "target.renamed"
 		if ns != "source.coll" {
 			expected = "target.system.buckets.renamed"
@@ -134,7 +136,8 @@ func TestLazyNamespaceAndDBRef(t *testing.T) {
 	}
 	record, _ := lazyRecord(t, "i", bson.D{{"$ref", "coll"}, {"$id", int32(1)}, {"$db", "source"}})
 	log := record.original.partialLog
-	transformPartialLog(log, transform.NewNamespaceTransform([]string{"source:target"}), true)
+	_, transformErr := transformPartialLog(log, transform.NewNamespaceTransform([]string{"source:target"}), true)
+	require.NoError(t, transformErr)
 	require.NotNil(t, log.Object)
 	require.Equal(t, "target", oplog.GetKey(log.Object, "$db"))
 	encoded, err := bson.Marshal(log)
@@ -202,4 +205,35 @@ func TestLazyApplyOpsFallback(t *testing.T) {
 			require.Nil(mt, log.Object)
 		})
 	}
+}
+
+func TestLazyDBRefFailureDoesNotAdvance(t *testing.T) {
+    saved := conf.Options
+    defer func() { conf.Options = saved }()
+    conf.Options.IncrSyncDBRef = true
+    first, _ := lazyRecord(t, "i", bson.D{{"_id", int32(1)}})
+    broken, raw := lazyRecord(t, "i", bson.D{{"_id", int32(2)}, {"value", "payload"}})
+    // Deliberately violate ownership after parsing to exercise an otherwise
+    // unreachable decode error. The first field can decode before the failure.
+    payload := bson.Raw(raw).Lookup("o").Document().Lookup("value").Value
+    payload[0], payload[1], payload[2], payload[3] = 255, 255, 255, 127
+    exec := &Executor{batchExecutor: &BatchGroupExecutor{NsTrans: transform.NewNamespaceTransform([]string{"source:target"})}}
+    for attempt := 0; attempt < 2; attempt++ {
+        err := exec.doSync([]*OplogRecord{first, broken})
+        require.ErrorContains(t, err, "materialize DBRef oplog")
+        require.Equal(t, "source.coll", first.original.partialLog.Namespace)
+        require.Equal(t, "source.coll", broken.original.partialLog.Namespace)
+        require.Nil(t, broken.original.partialLog.Object, "failed decode must not cache a partial document")
+    }
+}
+
+func TestLazySimilarIndexNamespaceTransform(t *testing.T) {
+    raw, err := bson.Marshal(bson.D{{"op", "i"}, {"ns", "source.mysystem.indexes"}, {"o", bson.D{{"_id", int32(1)}}}})
+    require.NoError(t, err)
+    log, err := oplog.ParseRaw(raw)
+    require.NoError(t, err)
+    _, err = transformPartialLog(log, transform.NewNamespaceTransform([]string{"source:target"}), false)
+    require.NoError(t, err)
+    require.Equal(t, "target.mysystem.indexes", log.Namespace)
+    require.Nil(t, log.Object)
 }

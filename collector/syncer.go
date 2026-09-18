@@ -482,6 +482,17 @@ func (sync *OplogSyncer) startDeserializer() {
 	}
 }
 
+func newOplogParser(lazy bool) func([]byte) (*oplog.PartialLog, error) {
+	if lazy {
+		return oplog.ParseRaw
+	}
+	return func(input []byte) (*oplog.PartialLog, error) {
+		log := &oplog.PartialLog{}
+		err := bson.Unmarshal(input, &log.ParsedLog)
+		return log, err
+	}
+}
+
 func (sync *OplogSyncer) deserializer(index int) {
 	// parser is used to parse the raw []byte
 	var parser func(input []byte) (*oplog.PartialLog, error)
@@ -492,7 +503,7 @@ func (sync *OplogSyncer) deserializer(index int) {
 		}
 	} else {
 		// parse []byte (oplog format) -> oplog
-		parser = oplog.ParseRaw
+		parser = newOplogParser(conf.Options.IncrSyncLazyOplogParse)
 	}
 
 	// combiner is used to combine data and send to downstream
