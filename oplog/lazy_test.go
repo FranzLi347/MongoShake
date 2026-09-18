@@ -261,49 +261,49 @@ func BenchmarkParseRaw(b *testing.B) {
 }
 
 func TestParseRawDepthLimit(t *testing.T) {
-    for _, kind := range []string{"document", "array", "scope"} {
-        t.Run(kind, func(t *testing.T) {
-            doc := bson.Raw{5, 0, 0, 0, 0}
-            for depth := 0; depth <= maxRawDocumentDepth+1; depth++ {
-                err := validateRawDocuments(doc, 0)
-                if depth <= maxRawDocumentDepth {
-                    require.NoError(t, err)
-                } else {
-                    require.ErrorContains(t, err, "maximum depth")
-                    _, err = ParseRaw(doc)
-                    require.ErrorContains(t, err, "maximum depth")
-                }
-                var value interface{} = doc
-                if kind == "array" {
-                    value = bson.RawValue{Type: bsontype.Array, Value: doc}
-                } else if kind == "scope" {
-                    value = primitive.CodeWithScope{Code: "return x", Scope: doc}
-                }
-                raw, err := bson.Marshal(bson.D{{"0", value}})
-                require.NoError(t, err)
-                doc = bson.Raw(raw)
-            }
-        })
-    }
+	for _, kind := range []string{"document", "array", "scope"} {
+		t.Run(kind, func(t *testing.T) {
+			doc := bson.Raw{5, 0, 0, 0, 0}
+			for depth := 0; depth <= maxRawDocumentDepth+1; depth++ {
+				err := validateRawDocuments(doc, 0)
+				if depth <= maxRawDocumentDepth {
+					require.NoError(t, err)
+				} else {
+					require.ErrorContains(t, err, "maximum depth")
+					_, err = ParseRaw(doc)
+					require.ErrorContains(t, err, "maximum depth")
+				}
+				var value interface{} = doc
+				if kind == "array" {
+					value = bson.RawValue{Type: bsontype.Array, Value: doc}
+				} else if kind == "scope" {
+					value = primitive.CodeWithScope{Code: "return x", Scope: doc}
+				}
+				raw, err := bson.Marshal(bson.D{{"0", value}})
+				require.NoError(t, err)
+				doc = bson.Raw(raw)
+			}
+		})
+	}
 }
 
 func TestLazyLegacyIndexNamespace(t *testing.T) {
-    for _, ns := range []string{"db.system.indexes", "db.mysystem.indexes", "db.foo.system.indexes"} {
-        raw, err := bson.Marshal(bson.D{{"op", "i"}, {"ns", ns}, {"o", bson.D{{"ns", "db.coll"}}}})
-        require.NoError(t, err)
-        log, err := ParseRaw(raw)
-        require.NoError(t, err)
-        require.Equal(t, ns == "db.system.indexes", log.Object != nil)
-    }
+	for _, ns := range []string{"db.system.indexes", "db.mysystem.indexes", "db.foo.system.indexes"} {
+		raw, err := bson.Marshal(bson.D{{"op", "i"}, {"ns", ns}, {"o", bson.D{{"ns", "db.coll"}}}})
+		require.NoError(t, err)
+		log, err := ParseRaw(raw)
+		require.NoError(t, err)
+		require.Equal(t, ns == "db.system.indexes", log.Object != nil)
+	}
 }
 
 func TestLazyCommandName(t *testing.T) {
-    for _, object := range []bson.D{nil, {{"create", "coll"}}, {{"unknown", 1}, {"create", "coll"}}} {
-        raw, err := bson.Marshal(object)
-        require.NoError(t, err)
-        expected, found := ExtraCommandName(object)
-        actual, rawFound := ExtraCommandName(bson.Raw(raw))
-        require.Equal(t, expected, actual)
-        require.Equal(t, found, rawFound)
-    }
+	for _, object := range []bson.D{{}, {{"create", "coll"}}, {{"unknown", 1}, {"create", "coll"}}} {
+		raw, err := bson.Marshal(object)
+		require.NoError(t, err)
+		expected, found := ExtraCommandName(object)
+		actual, rawFound := ExtraCommandName(bson.Raw(raw))
+		require.Equal(t, expected, actual)
+		require.Equal(t, found, rawFound)
+	}
 }

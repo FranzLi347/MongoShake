@@ -46,7 +46,7 @@ jobs:
               if docker exec "$name" mongosh --quiet --port "$port" --eval 'quit(db.adminCommand({ping:1}).ok ? 0 : 1)'; then break; fi
               sleep 1
             done
-            docker exec "$name" mongosh --quiet --port "$port" --eval "const c={_id:'$name',members:[{_id:0,host:'127.0.0.1:$port'}]}; if ('$name'==='cfg') c.configsvr=true; assert.commandWorked(rs.initiate(c))"
+            docker exec "$name" mongosh --quiet --port "$port" --eval "const c={_id:'$name',members:[{_id:0,host:'127.0.0.1:$port'}]}; if ('$name'==='cfg') c.configsvr=true; const r=rs.initiate(c); printjson(r); quit(r.ok ? 0 : 1)"
             for i in $(seq 1 30); do
               if docker exec "$name" mongosh --quiet --port "$port" --eval 'quit(db.hello().isWritablePrimary ? 0 : 1)'; then break; fi
               sleep 1
@@ -58,7 +58,7 @@ jobs:
             if docker exec router mongosh --quiet --port 27018 --eval 'quit(db.adminCommand({ping:1}).ok ? 0 : 1)'; then break; fi
             sleep 1
           done
-          docker exec router mongosh --quiet --port 27018 --eval 'assert.commandWorked(sh.addShard("shard1/127.0.0.1:27021")); assert.commandWorked(sh.addShard("shard2/127.0.0.1:27022")); printjson(db.adminCommand({listShards:1}))'
+          docker exec router mongosh --quiet --port 27018 --eval 'for (const uri of ["shard1/127.0.0.1:27021","shard2/127.0.0.1:27022"]) { const r=sh.addShard(uri); printjson(r); if (!r.ok) quit(1); } printjson(db.adminCommand({listShards:1}))'
       - name: Complete executor tests against real MongoDB with race detector
         run: go test -race ./executor -count=1 -timeout=8m -v
       - name: Complete oplog tests against real MongoDB with race detector
@@ -74,3 +74,19 @@ jobs:
       - name: Allocation benchmark
         if: ${{ !cancelled() }}
         run: go test ./oplog -run '^$' -bench '^BenchmarkParseRaw$' -benchmem -count=3
+
+  backport:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GOWORK: 'off'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 5cf855ba8cc4d59af20f3e0b64ffc5d8dcfb88b6
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Isolated eager-record regression on independent bugfix commit
+        run: go test -race ./executor -run '^TestBulkUpdateAllApplyOps$' -count=1 -v

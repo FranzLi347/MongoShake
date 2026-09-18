@@ -325,13 +325,13 @@ func (bw *BulkWriter) doUpdate(database, collection string, metadata bson.E, opl
 				// Column-store diffs in time-series buckets need the original applyOps.
 				if strings.HasPrefix(collection, utils.VarSystemBucketsPrefix) {
 					l.Logger.Infof("bulk_writer fall back to applyOps for time-series bucket update on %s.%s: %v", database, collection, oplogErr)
-				if applyErr := replayUpdateViaApplyOps(bw.conn.Client, log.original.partialLog); applyErr != nil {
+					if applyErr := replayUpdateViaApplyOps(bw.conn.Client, log.original.partialLog); applyErr != nil {
 						return applyErr
 					}
 					continue
 				}
 				l.Logger.Errorf("doUpdate run failed err[%v] org_doc[%v]", oplogErr, log.original.partialLog)
-			return oplogErr
+				return oplogErr
 			}
 
 			if upsert && len(log.original.partialLog.DocumentKey) > 0 {

@@ -208,42 +208,42 @@ func TestLazyApplyOpsFallback(t *testing.T) {
 }
 
 func TestLazyDBRefFailureDoesNotAdvance(t *testing.T) {
-    saved := conf.Options
-    defer func() { conf.Options = saved }()
-    conf.Options.IncrSyncDBRef = true
-    first, _ := lazyRecord(t, "i", bson.D{{"_id", int32(1)}})
-    broken, raw := lazyRecord(t, "i", bson.D{{"_id", int32(2)}, {"value", "payload"}})
-    // Deliberately violate ownership after parsing to exercise an otherwise
-    // unreachable decode error. The first field can decode before the failure.
-    payload := bson.Raw(raw).Lookup("o").Document().Lookup("value").Value
-    payload[0], payload[1], payload[2], payload[3] = 255, 255, 255, 127
-    exec := &Executor{batchExecutor: &BatchGroupExecutor{NsTrans: transform.NewNamespaceTransform([]string{"source:target"})}}
-    for attempt := 0; attempt < 2; attempt++ {
-        err := exec.doSync([]*OplogRecord{first, broken})
-        require.ErrorContains(t, err, "materialize DBRef oplog")
-        require.Equal(t, "source.coll", first.original.partialLog.Namespace)
-        require.Equal(t, "source.coll", broken.original.partialLog.Namespace)
-        require.Nil(t, broken.original.partialLog.Object, "failed decode must not cache a partial document")
-    }
+	saved := conf.Options
+	defer func() { conf.Options = saved }()
+	conf.Options.IncrSyncDBRef = true
+	first, _ := lazyRecord(t, "i", bson.D{{"_id", int32(1)}})
+	broken, raw := lazyRecord(t, "i", bson.D{{"_id", int32(2)}, {"value", "payload"}})
+	// Deliberately violate ownership after parsing to exercise an otherwise
+	// unreachable decode error. The first field can decode before the failure.
+	payload := bson.Raw(raw).Lookup("o").Document().Lookup("value").Value
+	payload[0], payload[1], payload[2], payload[3] = 255, 255, 255, 127
+	exec := &Executor{batchExecutor: &BatchGroupExecutor{NsTrans: transform.NewNamespaceTransform([]string{"source:target"})}}
+	for attempt := 0; attempt < 2; attempt++ {
+		err := exec.doSync([]*OplogRecord{first, broken})
+		require.ErrorContains(t, err, "materialize DBRef oplog")
+		require.Equal(t, "source.coll", first.original.partialLog.Namespace)
+		require.Equal(t, "source.coll", broken.original.partialLog.Namespace)
+		require.Nil(t, broken.original.partialLog.Object, "failed decode must not cache a partial document")
+	}
 }
 
 func TestLazySimilarIndexNamespaceTransform(t *testing.T) {
-    raw, err := bson.Marshal(bson.D{{"op", "i"}, {"ns", "source.mysystem.indexes"}, {"o", bson.D{{"_id", int32(1)}}}})
-    require.NoError(t, err)
-    log, err := oplog.ParseRaw(raw)
-    require.NoError(t, err)
-    _, err = transformPartialLog(log, transform.NewNamespaceTransform([]string{"source:target"}), false)
-    require.NoError(t, err)
-    require.Equal(t, "target.mysystem.indexes", log.Namespace)
-    require.Nil(t, log.Object)
+	raw, err := bson.Marshal(bson.D{{"op", "i"}, {"ns", "source.mysystem.indexes"}, {"o", bson.D{{"_id", int32(1)}}}})
+	require.NoError(t, err)
+	log, err := oplog.ParseRaw(raw)
+	require.NoError(t, err)
+	_, err = transformPartialLog(log, transform.NewNamespaceTransform([]string{"source:target"}), false)
+	require.NoError(t, err)
+	require.Equal(t, "target.mysystem.indexes", log.Namespace)
+	require.Nil(t, log.Object)
 }
 
 func TestLazyMalformedIndexFailsBeforeExecution(t *testing.T) {
-    for _, value := range []interface{}{nil, int32(42), ""} {
-        record := &OplogRecord{original: &PartialLogWithCallback{partialLog: &oplog.PartialLog{ParsedLog: oplog.ParsedLog{
-            Operation: "i", Namespace: "source.system.indexes", Object: bson.D{{"ns", value}},
-        }}}}
-        exec := &Executor{batchExecutor: &BatchGroupExecutor{}}
-        require.ErrorContains(t, exec.doSync([]*OplogRecord{record}), "invalid o.ns")
-    }
+	for _, value := range []interface{}{nil, int32(42), ""} {
+		record := &OplogRecord{original: &PartialLogWithCallback{partialLog: &oplog.PartialLog{ParsedLog: oplog.ParsedLog{
+			Operation: "i", Namespace: "source.system.indexes", Object: bson.D{{"ns", value}},
+		}}}}
+		exec := &Executor{batchExecutor: &BatchGroupExecutor{}}
+		require.ErrorContains(t, exec.doSync([]*OplogRecord{record}), "invalid o.ns")
+	}
 }
