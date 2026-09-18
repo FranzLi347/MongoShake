@@ -1,0 +1,45 @@
+name: Time-series baseline diagnosis
+on:
+  push:
+    branches: ['validation/lazy-oplog-baseline-*']
+permissions:
+  contents: read
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        topology: [replica, standalone]
+    env:
+      GOWORK: 'off'
+      MONGOSHAKE_TEST_URL: mongodb://127.0.0.1:27019
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 53514441d39c85bdd87a3eb960787520c741ddf7
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Start MongoDB
+        run: |
+          set -euo pipefail
+          extra=()
+          if [ "${{ matrix.topology }}" = replica ]; then extra=(--replSet rs); fi
+          docker run -d --name mongo --network host mongo:7.0 --port 27019 --bind_ip_all --wiredTigerCacheSizeGB 0.25 "${extra[@]}"
+          for i in $(seq 1 30); do
+            if docker exec mongo mongosh --quiet --port 27019 --eval 'quit(db.adminCommand({ping:1}).ok ? 0 : 1)'; then break; fi
+            sleep 1
+          done
+          if [ "${{ matrix.topology }}" = replica ]; then
+            docker exec mongo mongosh --quiet --port 27019 --eval 'const r=rs.initiate({_id:"rs",members:[{_id:0,host:"127.0.0.1:27019"}]}); printjson(r); quit(r.ok ? 0 : 1)'
+            for i in $(seq 1 30); do
+              if docker exec mongo mongosh --quiet --port 27019 --eval 'quit(db.hello().isWritablePrimary ? 0 : 1)'; then break; fi
+              sleep 1
+            done
+          fi
+          docker exec mongo mongosh --quiet --port 27019 --eval 'print(db.version()); quit(db.hello().isWritablePrimary ? 0 : 1)'
+      - name: Reproduce time-series fixture on unmodified base
+        run: go test -race ./executor -run '^TestTimeSeriesIntegration$' -count=1 -v
